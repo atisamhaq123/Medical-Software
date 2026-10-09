@@ -38,3 +38,30 @@ td small{font-size:10px}
 .authenticator-manual summary{cursor:pointer;font-weight:500;color:#557762}
 .authenticator-manual summary:focus-visible{outline:2px solid #6fab9a;outline-offset:4px}
 .authenticator-manual p{font-size:10px;line-height:1.7;color:#799282}
+/* Give authentication forms a full-width grid cell and a comfortable reading size. */
+.login-content{width:100%;min-width:0;max-width:none;margin:0;padding:56px clamp(32px,4vw,72px)}
+.login-form{width:100%;max-width:480px}
+.login-form .eyebrow{font-size:10px;letter-spacing:1.7px;margin-bottom:14px}
+.login-form h2{font-size:36px;line-height:1.25;letter-spacing:-1.1px}
+.login-form>p{font-size:15px;line-height:1.7;margin:14px 0 34px}
+.login-form .field{margin-bottom:24px}
+.login-form .field label{font-size:14px;margin-bottom:10px}
+.login-form input{min-height:54px;padding:14px 16px;font-size:15px;border-radius:8px}
+.login-form .button{min-height:52px;padding:14px 18px;font-size:14px;border-radius:8px}
+.login-footnote{font-size:12px;line-height:1.8;margin-top:26px}
+.login-demo-note{font-size:12px;line-height:1.8;padding:18px 20px;margin-top:30px}
+.login-demo-note strong{font-size:13px;margin-bottom:6px}
+.login-form .notice{font-size:14px}
+.authenticator-setup>strong{font-size:13px}
+.authenticator-hint,.authenticator-manual{font-size:13px}
+.authenticator-manual p{font-size:12px}
+@media(max-width:1050px) and (min-width:761px){
+    .login-content{padding:40px 30px}
+    .login-form h2{font-size:30px}
+}
+@media(max-width:760px){
+    .login-content{padding:36px 24px 44px}
+    .login-form{max-width:480px}
+    .login-form h2{font-size:29px}
+    .login-form>p{font-size:14px;margin-bottom:28px}
+}
