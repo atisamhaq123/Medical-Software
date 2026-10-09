@@ -13,15 +13,16 @@
 /.vscode
 /.zed
 /auth.json
-/node_modules
+node_modules/
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
 /storage/*.key
 /storage/pail
-/vendor
-/composer.phar
+# Downloadable dependencies (keep manifests and lockfiles committed)
+vendor/
+composer.phar
 _ide_helper.php
 Homestead.json
 Homestead.yaml
