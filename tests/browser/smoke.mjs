@@ -1,0 +1,71 @@
+import { chromium } from 'playwright';
+import { spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import assert from 'node:assert/strict';
+
+const php = process.env.MEDICA_PHP || 'C:/wamp64/bin/php/php8.4.15/php.exe';
+const fixture = spawnSync(php, ['-d', 'xdebug.mode=off', 'tests/browser/fixture.php', 'enrollment'], { encoding: 'utf8' });
+if (fixture.status !== 0) throw new Error(fixture.stderr || fixture.stdout);
+const credentials = JSON.parse(fixture.stdout);
+function authenticatorCode(secret) {
+const bits = [...secret].map(char => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(char).toString(2).padStart(5, '0')).join('');
+const key = Buffer.from(bits.match(/.{8}/g).map(byte => parseInt(byte, 2)));
+const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+const digest = createHmac('sha1', key).update(counter).digest();
+const offset = digest[19] & 15;
+const code = ((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).toString().padStart(6, '0');
+return code;
+}
+let browser;
+try {
+    browser = await chromium.launch({ executablePath: process.env.MEDICA_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 1 });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.goto('http://127.0.0.1:8000/login');
+    await page.getByLabel('Work email').fill(credentials.email);
+    await page.getByLabel('Password', { exact: true }).fill(credentials.password);
+    await page.getByRole('button', { name: 'Sign in to workspace' }).click();
+    const qr = page.getByRole('img', { name: 'QR code to add your Medica account to an authenticator app' });
+    await qr.waitFor();
+    assert.ok(await qr.evaluate(img => img.src.startsWith('data:image/svg+xml;base64,') && img.complete && img.naturalWidth === 256), 'Local QR image should load');
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await qr.evaluate(img => img.getBoundingClientRect().right <= innerWidth), 'QR should fit on a mobile screen');
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    const setupSecret = await page.locator('.setup-key').textContent();
+    await page.getByLabel('Authenticator code').fill(authenticatorCode(setupSecret.trim()));
+    await page.getByRole('button', { name: 'Verify & continue' }).click();
+    await page.waitForURL('http://127.0.0.1:8000/');
+    await page.getByRole('heading', { name: /Good/ }).waitFor();
+    mkdirSync('docs/previews', { recursive: true });
+    await page.screenshot({ path: 'docs/previews/dashboard-desktop.png', fullPage: true });
+    await page.getByRole('link', { name: 'Patients', exact: true }).click();
+    await page.getByLabel('Search patients').fill('Emma');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByText('Emma Thompson', { exact: true }).waitFor();
+    assert.equal(await page.locator('tbody tr').count(), 1);
+    await page.getByText('Emma Thompson', { exact: true }).click();
+    await page.getByRole('heading', { name: 'Clinical notes' }).waitFor();
+    await page.screenshot({ path: 'docs/previews/patient-profile.png', fullPage: true });
+    await page.getByRole('link', { name: 'Appointments', exact: true }).click();
+    await page.getByRole('button', { name: 'Book appointment', exact: true }).click();
+    assert.ok(await page.locator('#booking-dialog').evaluate(dialog => dialog.open));
+    await page.getByRole('button', { name: 'Close booking' }).click();
+    await page.goto('http://127.0.0.1:8000/');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: 'docs/previews/dashboard-mobile.png', fullPage: true, animations: 'disabled' });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Mobile page should not overflow horizontally');
+    await page.getByRole('button', { name: 'Toggle navigation' }).click();
+    assert.ok(await page.locator('#sidebar').evaluate(sidebar => sidebar.classList.contains('open')));
+    await page.getByRole('link', { name: 'Patients', exact: true }).click();
+    await page.getByRole('heading', { name: 'Patient directory' }).waitFor();
+    assert.deepEqual(errors, [], 'Browser should have no script, asset, or CSP errors');
+    console.log('Browser checks passed: local QR enrollment, mobile QR layout, MFA login, dashboard, patient search/profile, booking dialog, mobile overflow and navigation.');
+} finally {
+    await browser?.close();
+    const cleanup = spawnSync(php, ['-d', 'xdebug.mode=off', 'tests/browser/fixture.php', 'cleanup', credentials.email], { encoding: 'utf8' });
+    if (cleanup.status !== 0) throw new Error(cleanup.stderr || cleanup.stdout);
+}
